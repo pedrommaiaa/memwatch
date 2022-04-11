@@ -10,3 +10,5 @@ dotenv = "0.15.0"
 ethers = { git = "https://github.com/gakonst/ethers-rs" }
 tokio = { version = "1", features = ["full"] }
 ethers-providers = "0.6.2"
+tui = "0.17"
+crossterm = "0.22"
