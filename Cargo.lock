@@ -1786,6 +1786,7 @@ dependencies = [
  "crossterm",
  "dotenv",
  "ethers",
+ "ethers-core 0.6.3",
  "ethers-providers 0.6.2",
  "tokio",
  "tui",
