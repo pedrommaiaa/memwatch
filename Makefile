@@ -4,5 +4,5 @@ run:
 clean:
 	cargo clean
 
-build:
+compile:
 	cargo build
