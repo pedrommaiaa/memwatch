@@ -4,7 +4,7 @@ Watch the Ethereum mempool.
 
 ![](./images/dark-florest.png)
 
-to compile: `make compile`
+to compile: `make compile`  
 to run: `make run`
 
 Run it in full screen for better visualization.
