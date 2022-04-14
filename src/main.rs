@@ -2,22 +2,42 @@ use crossterm::{
     event::{self, Event as CEvent, KeyCode},
     terminal::{disable_raw_mode, enable_raw_mode},
 };
-
+use thiserror::Error;
 use std::io;
+use std::fs;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
-
+use serde::{Deserialize, Serialize};
 use tui::{
     backend::CrosstermBackend,
-    layout::{Alignment, Constraint, Direction, Layout},
-    style::{Color, Style},
-    text::{Span, Spans},
+    layout::{Constraint, Direction, Layout},
+    style::{Color, Modifier, Style},
+    text::{Span},
     widgets::{
-        Block, Paragraph, BorderType, Borders,
+        Block, BorderType, Borders, Cell, ListState, Row, Table,
     },
     Terminal,
 };
+
+const TX_PATH: &str = "./src/data/tx.json";
+
+
+#[derive(Serialize, Deserialize, Clone)]
+struct Transaction {
+    tx_hash: String,
+    from: String,
+    to: String,
+    value: usize,
+}
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("error reading the DB file: {0}")]
+    ReadDBError(#[from] io::Error),
+    #[error("error parsing the DB file: {0}")]
+    ParseDBError(#[from] serde_json::Error),
+}
 
 enum Event<I> {
     Input(I),
@@ -56,20 +76,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
 
+    let mut tx_list_state = ListState::default();
+    tx_list_state.select(Some(0));
+
     loop {
         terminal.draw(|rect| {
             let size = rect.size();
             let chuncks = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints(
-                    [
-                        Constraint::Length(1),
-                        Constraint::Min(1),
-                        Constraint::Length(1),
-                    ]
-                )
+                .constraints([Constraint::Percentage(100)].as_ref())
                 .split(size);
-            rect.render_widget(render_home(), chuncks[1]);
+            rect.render_widget(render_home(&tx_list_state), chuncks[0]);
         })?;
 
         match rx.recv()? {
@@ -88,18 +105,62 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn render_home<'a>(tx_list_state: &ListState) -> Table<'a> {
+    let tx_list = read_db().expect("can fetch tx list");
 
-fn render_home<'a>() -> Paragraph<'a> {
-    let home = Paragraph::new(vec![
-        Spans::from(vec![Span::raw("Welcome To The Mempool")]),
-    ])
-    .alignment(Alignment::Center)
+    let selected_tx = tx_list
+        .get(
+            tx_list_state
+                .selected()
+                .expect("there is always a selected tx"),
+        )
+        .expect("exists")
+        .clone();
+
+    let tx_detail = Table::new(vec![Row::new(vec![
+        Cell::from(Span::raw(selected_tx.tx_hash)),
+        Cell::from(Span::raw(selected_tx.from)),
+        Cell::from(Span::raw(selected_tx.to)),
+        Cell::from(Span::raw(selected_tx.value.to_string())),
+    ])])
+    .header(Row::new(vec![
+        Cell::from(Span::styled(
+            "TX HASH",
+            Style::default().add_modifier(Modifier::BOLD),
+        )),
+        Cell::from(Span::styled(
+            "FROM",
+            Style::default().add_modifier(Modifier::BOLD),
+        )),
+        Cell::from(Span::styled(
+            "TO",
+            Style::default().add_modifier(Modifier::BOLD),
+        )),
+        Cell::from(Span::styled(
+            "VALUE",
+            Style::default().add_modifier(Modifier::BOLD),
+        )),
+    ]))
     .block(
         Block::default()
             .borders(Borders::ALL)
             .style(Style::default().fg(Color::White))
             .title("Mempool")
             .border_type(BorderType::Plain),
-    );
-    home
+    )
+    .widths(&[
+        Constraint::Percentage(35),
+        Constraint::Percentage(25),
+        Constraint::Percentage(25),
+        Constraint::Percentage(25),
+    ]);
+
+    tx_detail
+}
+
+
+fn read_db() -> Result<Vec<Transaction>, Error> {
+    let db_content = fs::read_to_string(TX_PATH)?;
+    let parsed: Vec<Transaction> = serde_json::from_str(&db_content)?;
+    Ok(parsed)
 }
